@@ -28,7 +28,7 @@ Minimal env:
 
 ## Architecture (short)
 - Components
-  - Controllers: HTTP layer (`/gasPrice`, `/return/...`, `/healthz`)
+  - Controllers: HTTP layer (`/gasPrice`, `/return/...`)
   - Services: logic and chain I/O (`EthService`, `GasService`, `UniswapService`)
   - Modules: wire services and controllers (`EthModule`, `UniswapModule`, `MetricsModule`, `RateLimitModule`)
 - Cross‑cutting

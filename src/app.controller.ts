@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { EthService } from './eth/eth.service';
 
 @Controller()
@@ -12,7 +12,7 @@ export class AppController {
       await this.eth.getProvider().getBlockNumber();
       return { ok: true };
     } catch {
-      return { ok: false };
+      throw new ServiceUnavailableException({ ok: false, code: 'PROVIDER_UNAVAILABLE' });
     }
   }
 }

@@ -54,9 +54,15 @@ export class GasService implements OnModuleInit, OnModuleDestroy {
    */
   private async refresh(latestBlockNumber?: number) {
     const provider = this.eth.getProvider();
+    const timeoutMs = parseInt(process.env.RPC_TIMEOUT_MS ?? '1500', 10);
     const [fd, latestBlock] = await Promise.all([
       this.eth.getFeeData(),
-      provider.getBlock('latest'),
+      (async () => {
+        const start = Date.now();
+        const p = provider.getBlock('latest');
+        const r = await Promise.race([p, new Promise<null>((_, rej) => setTimeout(() => rej(new Error('Timeout')), timeoutMs))]);
+        return r as any;
+      })(),
     ]);
     const defaultPriority = ethers.parseUnits(process.env.DEFAULT_PRIORITY_GWEI ?? '1.5', 'gwei');
     const baseFee = latestBlock?.baseFeePerGas ?? null;

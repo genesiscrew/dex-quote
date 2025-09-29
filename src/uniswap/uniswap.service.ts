@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ethers } from 'ethers';
 import { EthService } from '../eth/eth.service';
 import { FACTORY_ABI, PAIR_ABI, UNISWAP_V2_FACTORY } from './abis';
+import { withRetry } from '../common/utils/retry.util';
 
 type QuoteResult = {
   pair: string;
@@ -48,21 +49,22 @@ export class UniswapService {
   async quote(fromToken: string, toToken: string, amountInStr: string): Promise<QuoteResult> {
     const provider = this.eth.getProvider();
     const factory = this.createContract(UNISWAP_V2_FACTORY, FACTORY_ABI, provider);
-    const pairAddr: string = await factory.getPair(fromToken, toToken);
+    const timeoutMs = parseInt(process.env.RPC_TIMEOUT_MS ?? '1500', 10);
+    const pairAddr: string = await withRetry(() => (factory as any).getPair(fromToken, toToken), { attempts: 1, timeoutMs });
     if (!pairAddr || pairAddr === ethers.ZeroAddress) {
       throw new NotFoundException({ code: 'PAIR_NOT_FOUND', message: 'UniswapV2 pair does not exist' });
     }
 
     const pair = this.createContract(pairAddr, PAIR_ABI, provider);
     const [token0, reserves, block] = await Promise.all([
-      pair.token0() as Promise<string>,
-      pair.getReserves() as Promise<[ethers.BigNumberish, ethers.BigNumberish, number]>,
-      provider.getBlockNumber(),
+      withRetry(() => (pair as any).token0() as Promise<string>, { attempts: 1, timeoutMs }),
+      withRetry(() => (pair as any).getReserves() as Promise<[ethers.BigNumberish, ethers.BigNumberish, number]>, { attempts: 1, timeoutMs }),
+      withRetry(() => provider.getBlockNumber(), { attempts: 1, timeoutMs }),
     ]);
 
-    const fromIsToken0 = fromToken.toLowerCase() === token0.toLowerCase();
-    const reserveIn = BigInt(fromIsToken0 ? reserves[0].toString() : reserves[1].toString());
-    const reserveOut = BigInt(fromIsToken0 ? reserves[1].toString() : reserves[0].toString());
+    const fromIsToken0 = fromToken.toLowerCase() === (token0 as string).toLowerCase();
+    const reserveIn = BigInt(fromIsToken0 ? (reserves as any)[0].toString() : (reserves as any)[1].toString());
+    const reserveOut = BigInt(fromIsToken0 ? (reserves as any)[1].toString() : (reserves as any)[0].toString());
     const amountIn = BigInt(amountInStr);
     const amountOut = this.getAmountOut(amountIn, reserveIn, reserveOut);
 

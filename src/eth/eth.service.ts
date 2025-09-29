@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ethers } from 'ethers';
+import { withRetry } from '../common/utils/retry.util';
 
 /**
  * Provides a singleton ethers JsonRpcProvider for chain access.
@@ -22,9 +23,10 @@ export class EthService implements OnModuleDestroy {
     return this.provider;
   }
 
-  /** Thin wrapper around provider.getFeeData(). */
+  /** Thin wrapper around provider.getFeeData() with timeout/retry. */
   async getFeeData(): Promise<ethers.FeeData> {
-    return this.provider.getFeeData();
+    const timeoutMs = parseInt(process.env.RPC_TIMEOUT_MS ?? '1500', 10);
+    return withRetry(() => this.provider.getFeeData(), { attempts: 1, backoffMs: 200, timeoutMs });
   }
 
   onModuleDestroy() {

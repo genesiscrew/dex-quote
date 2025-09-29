@@ -1,4 +1,4 @@
-import { Controller, Get, Res } from '@nestjs/common';
+import { Controller, Get, Res, ServiceUnavailableException } from '@nestjs/common';
 import type { Response } from 'express';
 import { GasService } from '../eth/gas.service';
 
@@ -17,7 +17,7 @@ export class GasController {
   async getGasPrice(@Res({ passthrough: true }) res: Response) {
     const snap = this.gas.getSnapshot();
     if (!snap) {
-      return { error: 'NO_DATA', stale: true };
+      throw new ServiceUnavailableException({ code: 'NO_DATA', message: 'Gas snapshot not ready' });
     }
     const ageMs = Math.max(Date.now() - snap.updatedAt, 0);
     res.setHeader('Age', String(Math.floor(ageMs / 1000)));

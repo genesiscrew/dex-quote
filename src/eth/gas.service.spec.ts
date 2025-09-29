@@ -89,6 +89,19 @@ describe('GasService', () => {
     expect(later?.stale).toBe(true);
     (Date.now as jest.Mock).mockRestore?.();
   });
+
+  it('does not hang when getBlock latest times out', async () => {
+    const eth = moduleRef.get(EthService);
+    jest.spyOn(eth, 'getProvider').mockReturnValue({
+      getFeeData: async () => ({ maxPriorityFeePerGas: 1n, maxFeePerGas: 3n, gasPrice: 2n }),
+      getBlock: async () => { await new Promise(r => setTimeout(r, 200)); return { baseFeePerGas: 1n, number: 100 }; },
+      getBlockNumber: async () => 100,
+      on: () => {}, off: () => {},
+    } as any);
+    process.env.RPC_TIMEOUT_MS = '50';
+    await expect((service as any).refresh()).rejects.toThrow('Timeout');
+    delete process.env.RPC_TIMEOUT_MS;
+  });
 });
 
 
