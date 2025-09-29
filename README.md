@@ -26,6 +26,31 @@ Minimal env:
   - Output: `amountOut`, `pair`, `reserveIn`, `reserveOut`, `feeBps`, `updatedAtBlock`
   - Errors: invalid params → 400; insufficient liquidity/input → 400 with Uniswap‑like messages; pair missing → 200 with `{ "error": "pair not found" }`
 
+### Examples
+```bash
+# Health
+curl -s http://localhost:3000/healthz | jq
+
+# Gas snapshot
+curl -i -s http://localhost:3000/gasPrice | sed -n '1,10p'
+curl -s http://localhost:3000/gasPrice | jq
+
+# 1 WETH -> USDC (amountIn in wei)
+WETH=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
+USDC=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+AMOUNT_WEI=1000000000000000000
+curl -s "http://localhost:3000/return/$WETH/$USDC/$AMOUNT_WEI" | jq
+
+# 100 USDC -> WETH (USDC has 6 decimals)
+USDC=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+WETH=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
+AMOUNT_USDC=100000000
+curl -s "http://localhost:3000/return/$USDC/$WETH/$AMOUNT_USDC" | jq
+
+# Metrics
+curl -s http://localhost:3000/metrics | head
+```
+
 ## Architecture (short)
 - Components
   - Controllers: HTTP layer (`/gasPrice`, `/return/...`)
@@ -85,4 +110,3 @@ npm run test:e2e   # e2e (provider overrides, no real RPC)
 
 ## Notes
 - Uniswap V2 math matches periphery (0.3% fee, constant‑product) computed in BigInt
-- Only ethers is used for chain access
