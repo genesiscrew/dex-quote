@@ -28,6 +28,10 @@ export class UniswapService {
     return new ethers.Contract(address, abi, provider);
   }
 
+  /**
+   * Uniswap V2 amountOut with 0.3% fee (997/1000).
+   * Throws on non‑positive input or zero reserves.
+   */
   private getAmountOut(amountIn: bigint, reserveIn: bigint, reserveOut: bigint): bigint {
     if (amountIn <= 0n) {
       throw new BadRequestException('UniswapV2Library: INSUFFICIENT_INPUT_AMOUNT');

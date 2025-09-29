@@ -23,6 +23,7 @@ export class GasService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     await this.refresh();
     const provider = this.eth.getProvider();
+    // Refresh on each new block (provider emits 'block' via polling or websockets)
     this.blockListener = async (bn: number) => {
       try {
         await this.refresh(bn);
@@ -47,6 +48,10 @@ export class GasService implements OnModuleInit, OnModuleDestroy {
     return { ...this.snapshot, stale };
   }
 
+  /**
+   * Refreshes the in-memory gas snapshot from the provider (EIP-1559 + legacy).
+   * Called on startup and on each new block.
+   */
   private async refresh(latestBlockNumber?: number) {
     const provider = this.eth.getProvider();
     const [fd, latestBlock] = await Promise.all([

@@ -2,6 +2,9 @@ import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { RateLimitService, RateLimitPolicy } from './rate-limit.service';
 import { extractClientIp } from '../common/utils/ip.util';
 
+/**
+ * Enforces per-IP, per-route token bucket limits and sets X-RateLimit-* headers.
+ */
 @Injectable()
 export class RateLimitGuard implements CanActivate {
   constructor(private readonly rl: RateLimitService) {}

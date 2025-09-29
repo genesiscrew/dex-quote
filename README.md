@@ -26,6 +26,22 @@ Minimal env:
   - Output: `amountOut`, `pair`, `reserveIn`, `reserveOut`, `feeBps`, `updatedAtBlock`
   - Errors: invalid params → 400; insufficient liquidity/input → 400 with Uniswap‑like messages; pair missing → 200 with `{ "error": "pair not found" }`
 
+## Architecture (short)
+- Components
+  - Controllers: HTTP layer (`/gasPrice`, `/return/...`, `/healthz`)
+  - Services: logic and chain I/O (`EthService`, `GasService`, `UniswapService`)
+  - Modules: wire services and controllers (`EthModule`, `UniswapModule`, `MetricsModule`, `RateLimitModule`)
+- Cross‑cutting
+  - Interceptor: sets `X-Response-Time`
+  - Middleware: records Prometheus HTTP metrics on `res.finish`
+  - Guard: per‑IP, per‑route rate limiting (token bucket)
+- Data flow
+  - `/gasPrice`: returns an in‑memory snapshot; `GasService` refreshes on each new block via ethers provider
+  - `/return/...`: reads UniV2 state (factory.getPair → pair.getReserves/token0), computes output with constant‑product math (0.3% fee) entirely off‑chain in BigInt
+- Error semantics
+  - 404 `{ code: PAIR_NOT_FOUND }` when no pair
+  - 400 Uniswap‑style messages for invalid input/insufficient liquidity
+
 ## Metrics
 - Prometheus at `GET /metrics` (`http_server_duration_ms`, `http_requests_total`, plus default Node.js metrics)
 - Every response includes `X-Response-Time: <ms>`

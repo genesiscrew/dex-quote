@@ -11,10 +11,17 @@ function isValidAmount(amount: string): boolean {
   }
 }
 
+/**
+ * Computes a Uniswap V2 quote using on-chain reserves and off-chain math.
+ */
 @Controller('return')
 export class QuoteController {
   constructor(private readonly uniswap: UniswapService) {}
 
+  /**
+   * GET /return/:fromTokenAddress/:toTokenAddress/:amountIn
+   * amountIn is in base units; validates inputs and delegates to UniswapService.
+   */
   @Get(':fromTokenAddress/:toTokenAddress/:amountIn')
   async getQuote(
     @Param('fromTokenAddress') fromTokenAddress: string,

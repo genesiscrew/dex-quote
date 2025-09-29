@@ -1,6 +1,9 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ethers } from 'ethers';
 
+/**
+ * Provides a singleton ethers JsonRpcProvider for chain access.
+ */
 @Injectable()
 export class EthService implements OnModuleDestroy {
   private readonly provider: ethers.JsonRpcProvider;
@@ -14,10 +17,12 @@ export class EthService implements OnModuleDestroy {
     this.provider = new ethers.JsonRpcProvider(rpcUrl, chainId);
   }
 
+  /** Returns the shared ethers provider. */
   getProvider(): ethers.JsonRpcProvider {
     return this.provider;
   }
 
+  /** Thin wrapper around provider.getFeeData(). */
   async getFeeData(): Promise<ethers.FeeData> {
     return this.provider.getFeeData();
   }
