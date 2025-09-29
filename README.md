@@ -1,98 +1,56 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# DEX Quote API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS service with two endpoints:
+- GET `/gasPrice`: recent Ethereum gas snapshot (fast, cached)
+- GET `/return/:fromTokenAddress/:toTokenAddress/:amountIn`: Uniswap V2 quote (off‑chain math)
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Uses ethers v6 only. No on‑chain quoting. Uniswap V2 factory: `0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f`.
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
+## Quick start
 ```bash
-$ npm install
+npm install
+cp .env.example .env   # set RPC_URL at minimum
+npm run start:dev
+```
+Minimal env:
+- `RPC_URL` (Alchemy/Infura/QuickNode)
+- `CHAIN_ID` (default 1)
+
+## Endpoints
+- GET `/gasPrice`
+  - Returns: `baseFeePerGas`, `maxPriorityFeePerGas`, `maxFeePerGas`, `gasPrice`, `blockNumber`, `updatedAt`, `stale`
+  - Notes: served from an in‑memory snapshot refreshed on each new block; the app waits for the first snapshot before listening.
+
+- GET `/return/:from/:to/:amount`
+  - Input: addresses and `amount` in base units (e.g., wei for WETH, 6‑decimals for USDC)
+  - Output: `amountOut`, `pair`, `reserveIn`, `reserveOut`, `feeBps`, `updatedAtBlock`
+  - Errors: invalid params → 400; insufficient liquidity/input → 400 with Uniswap‑like messages; pair missing → 200 with `{ "error": "pair not found" }`
+
+## Metrics
+- Prometheus at `GET /metrics` (`http_server_duration_ms`, `http_requests_total`, plus default Node.js metrics)
+- Every response includes `X-Response-Time: <ms>`
+
+## Rate limiting
+- Per‑IP, per‑route token bucket via `rate-limiter-flexible`
+- Defaults: `RL_DEFAULT_POINTS`, `RL_DEFAULT_DURATION`
+- Route overrides: `RL_GAS_*` for `/gasPrice`, `RL_RETURN_*` for `/return/...`
+- Backends: in‑memory by default; set `REDIS_URL` for Redis‑backed shared buckets
+- 429 responses include `X-RateLimit-*` and `Retry-After`
+
+## Testing
+```bash
+npm run test       # unit
+npm run test:e2e   # e2e (provider overrides, no real RPC)
 ```
 
-## Compile and run the project
+## Environment
+- Copy `.env.example` and adjust. Common variables:
+  - RPC: `RPC_URL`, `CHAIN_ID`
+  - Server: `PORT`
+  - Gas snapshot: `DEFAULT_PRIORITY_GWEI`, `GAS_READY_TIMEOUT_MS`
+  - Metrics: `METRICS_DEBUG`
+  - Rate limiting: `RL_DEFAULT_*`, `RL_GAS_*`, `RL_RETURN_*`, optional `REDIS_URL`
 
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
-```
-
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## Notes
+- Uniswap V2 math matches periphery (0.3% fee, constant‑product) computed in BigInt
+- Only ethers is used for chain access

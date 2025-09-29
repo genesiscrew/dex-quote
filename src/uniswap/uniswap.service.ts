@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { EthService } from '../eth/eth.service';
 import { FACTORY_ABI, PAIR_ABI, UNISWAP_V2_FACTORY } from './abis';
@@ -12,15 +12,26 @@ type QuoteResult = {
   feeBps: number;
   updatedAtBlock: number;
   stale: boolean;
+  error?: string;
 };
 
 @Injectable()
 export class UniswapService {
   constructor(private readonly eth: EthService) {}
 
+  // Factory method to facilitate testing/mocking of contracts
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private createContract(address: string, abi: any, provider: ethers.Provider): any {
+    return new ethers.Contract(address, abi, provider);
+  }
+
   private getAmountOut(amountIn: bigint, reserveIn: bigint, reserveOut: bigint): bigint {
-    if (amountIn <= 0n) return 0n;
-    if (reserveIn <= 0n || reserveOut <= 0n) return 0n;
+    if (amountIn <= 0n) {
+      throw new BadRequestException('UniswapV2Library: INSUFFICIENT_INPUT_AMOUNT');
+    }
+    if (reserveIn <= 0n || reserveOut <= 0n) {
+      throw new BadRequestException('UniswapV2Library: INSUFFICIENT_LIQUIDITY');
+    }
     const amountInWithFee = amountIn * 997n;
     const numerator = amountInWithFee * reserveOut;
     const denominator = reserveIn * 1000n + amountInWithFee;
@@ -29,7 +40,7 @@ export class UniswapService {
 
   async quote(fromToken: string, toToken: string, amountInStr: string): Promise<QuoteResult> {
     const provider = this.eth.getProvider();
-    const factory = new ethers.Contract(UNISWAP_V2_FACTORY, FACTORY_ABI, provider);
+    const factory = this.createContract(UNISWAP_V2_FACTORY, FACTORY_ABI, provider);
     const pairAddr: string = await factory.getPair(fromToken, toToken);
     if (!pairAddr || pairAddr === ethers.ZeroAddress) {
       const block = await provider.getBlockNumber();
@@ -42,10 +53,11 @@ export class UniswapService {
         feeBps: 30,
         updatedAtBlock: block,
         stale: false,
+        error: 'pair not found',
       };
     }
 
-    const pair = new ethers.Contract(pairAddr, PAIR_ABI, provider);
+    const pair = this.createContract(pairAddr, PAIR_ABI, provider);
     const [token0, reserves, block] = await Promise.all([
       pair.token0() as Promise<string>,
       pair.getReserves() as Promise<[ethers.BigNumberish, ethers.BigNumberish, number]>,
