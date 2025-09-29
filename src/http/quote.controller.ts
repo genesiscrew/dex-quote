@@ -1,0 +1,38 @@
+import { Controller, Get, Param, BadRequestException } from '@nestjs/common';
+import { ethers } from 'ethers';
+import { UniswapService } from '../uniswap/uniswap.service';
+
+function isValidAmount(amount: string): boolean {
+  try {
+    const v = BigInt(amount);
+    return v > 0n;
+  } catch {
+    return false;
+  }
+}
+
+@Controller('return')
+export class QuoteController {
+  constructor(private readonly uniswap: UniswapService) {}
+
+  @Get(':fromTokenAddress/:toTokenAddress/:amountIn')
+  async getQuote(
+    @Param('fromTokenAddress') fromTokenAddress: string,
+    @Param('toTokenAddress') toTokenAddress: string,
+    @Param('amountIn') amountIn: string,
+  ) {
+    if (!ethers.isAddress(fromTokenAddress)) {
+      throw new BadRequestException('Invalid fromTokenAddress');
+    }
+    if (!ethers.isAddress(toTokenAddress)) {
+      throw new BadRequestException('Invalid toTokenAddress');
+    }
+    if (!isValidAmount(amountIn)) {
+      throw new BadRequestException('Invalid amountIn');
+    }
+
+    return this.uniswap.quote(fromTokenAddress, toTokenAddress, amountIn);
+  }
+}
+
+
