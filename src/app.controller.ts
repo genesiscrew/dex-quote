@@ -1,12 +1,18 @@
 import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
+import { EthService } from './eth/eth.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(private readonly eth: EthService) {}
 
-  @Get()
-  getHello(): string {
-    return this.appService.getHello();
+  @Get('healthz')
+  async healthz() {
+    // basic provider check
+    try {
+      await this.eth.getProvider().getBlockNumber();
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
   }
 }

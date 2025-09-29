@@ -65,6 +65,7 @@ npm run test:e2e   # e2e (provider overrides, no real RPC)
   - Gas snapshot: `DEFAULT_PRIORITY_GWEI`, `GAS_READY_TIMEOUT_MS`
   - Metrics: `METRICS_DEBUG`
   - Rate limiting: `RL_DEFAULT_*`, `RL_GAS_*`, `RL_RETURN_*`, optional `REDIS_URL`
+  - Proxy trust: `TRUST_PROXY=1` to respect X-Forwarded-For
 
 ## Notes
 - Uniswap V2 math matches periphery (0.3% fee, constant‑product) computed in BigInt

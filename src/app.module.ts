@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { EthModule } from './eth/eth.module';
 import { UniswapModule } from './uniswap/uniswap.module';
 import { GasController } from './http/gas.controller';
@@ -18,6 +17,6 @@ import { RateLimitModule } from './rate-limit/rate-limit.module';
     RateLimitModule,
   ],
   controllers: [AppController, GasController, QuoteController],
-  providers: [AppService],
+  providers: [],
 })
 export class AppModule {}
