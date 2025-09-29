@@ -17,6 +17,7 @@ export class GasService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(GasService.name);
   private snapshot: GasSnapshot | null = null;
   private blockListener?: (bn: number) => void;
+  private pollTimer?: NodeJS.Timeout;
 
   constructor(private readonly eth: EthService) {}
 
@@ -32,6 +33,21 @@ export class GasService implements OnModuleInit, OnModuleDestroy {
       }
     };
     provider.on('block', this.blockListener);
+
+    // Fallback poller: if the primary block listener stalls, keep refreshing via failover
+    const intervalMs = parseInt(process.env.GAS_REFRESH_INTERVAL_MS ?? '5000', 10);
+    if (intervalMs > 0) {
+      this.pollTimer = setInterval(async () => {
+        try {
+          const latestBn = await this.eth.withProviderFailover((p) => p.getBlockNumber());
+          if (!this.snapshot || this.snapshot.blockNumber === null || latestBn > this.snapshot.blockNumber) {
+            await this.refresh(latestBn);
+          }
+        } catch (err) {
+          this.logger.warn(`Gas fallback poll failed: ${String(err)}`);
+        }
+      }, intervalMs);
+    }
   }
 
   onModuleDestroy() {
@@ -39,6 +55,7 @@ export class GasService implements OnModuleInit, OnModuleDestroy {
     if (this.blockListener) {
       provider.off('block', this.blockListener);
     }
+    if (this.pollTimer) clearInterval(this.pollTimer);
   }
 
   getSnapshot(): GasSnapshot | null {
@@ -54,15 +71,9 @@ export class GasService implements OnModuleInit, OnModuleDestroy {
    */
   private async refresh(latestBlockNumber?: number) {
     const provider = this.eth.getProvider();
-    const timeoutMs = parseInt(process.env.RPC_TIMEOUT_MS ?? '1500', 10);
     const [fd, latestBlock] = await Promise.all([
       this.eth.getFeeData(),
-      (async () => {
-        const start = Date.now();
-        const p = provider.getBlock('latest');
-        const r = await Promise.race([p, new Promise<null>((_, rej) => setTimeout(() => rej(new Error('Timeout')), timeoutMs))]);
-        return r as any;
-      })(),
+      this.eth.withProviderFailover((p) => p.getBlock('latest')),
     ]);
     const defaultPriority = ethers.parseUnits(process.env.DEFAULT_PRIORITY_GWEI ?? '1.5', 'gwei');
     const baseFee = latestBlock?.baseFeePerGas ?? null;
@@ -76,7 +87,7 @@ export class GasService implements OnModuleInit, OnModuleDestroy {
       maxFeePerGas: maxFee ? maxFee.toString() : null,
       gasPrice: gasPrice ? gasPrice.toString() : null,
       updatedAt: Date.now(),
-      blockNumber: latestBlockNumber ?? latestBlock?.number ?? (await provider.getBlockNumber()),
+      blockNumber: latestBlockNumber ?? latestBlock?.number ?? (await this.eth.withProviderFailover((p) => p.getBlockNumber())),
       stale: false,
     };
   }

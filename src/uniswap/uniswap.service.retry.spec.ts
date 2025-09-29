@@ -5,14 +5,18 @@ import { EthService } from '../eth/eth.service';
 describe('UniswapService retry/timeout', () => {
   let moduleRef: TestingModule;
   let service: UniswapService;
-  const factoryAddr = '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f';
 
   beforeEach(async () => {
     process.env.RPC_TIMEOUT_MS = '50';
+    const ethMock: Partial<EthService> = {
+      // Simulate EthService.withProviderFailover applying a timeout and erroring
+      withProviderFailover: async () => { throw new Error('Timeout'); },
+    } as any;
+
     moduleRef = await Test.createTestingModule({
       providers: [
         UniswapService,
-        { provide: EthService, useValue: { getProvider: () => ({ getBlockNumber: async () => 123 }) } },
+        { provide: EthService, useValue: ethMock },
       ],
     }).compile();
     service = moduleRef.get(UniswapService);
@@ -24,13 +28,7 @@ describe('UniswapService retry/timeout', () => {
     await moduleRef?.close();
   });
 
-  it('times out on slow getPair', async () => {
-    jest.spyOn<any, any>(service as any, 'createContract').mockImplementation((address: string) => {
-      if (address === factoryAddr) {
-        return { getPair: async () => { await new Promise(r => setTimeout(r, 200)); return '0xPAIR'; } } as any;
-      }
-      return {} as any;
-    });
+  it('propagates timeout error from failover on getPair', async () => {
     await expect(service.quote('0xFrom', '0xTo', '100')).rejects.toThrow('Timeout');
   });
 });

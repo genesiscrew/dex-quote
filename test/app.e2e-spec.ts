@@ -20,10 +20,9 @@ describe('AppController (e2e)', () => {
     await app?.close();
   });
 
-  it('/ (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
+  it('/healthz (GET)', async () => {
+    const res = await request(app.getHttpServer()).get('/healthz');
+    expect([200, 503]).toContain(res.status);
+    expect(typeof res.body.ok).toBe('boolean');
   });
 });

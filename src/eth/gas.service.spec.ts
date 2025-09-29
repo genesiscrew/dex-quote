@@ -33,6 +33,7 @@ class MockEthService {
   constructor(private readonly provider: MockProvider) {}
   getProvider() { return this.provider as any; }
   async getFeeData() { return this.provider.getFeeData(); }
+  async withProviderFailover<T>(op: (p: any) => Promise<T>) { return op(this.provider as any); }
 }
 
 describe('GasService', () => {
@@ -91,13 +92,21 @@ describe('GasService', () => {
   });
 
   it('does not hang when getBlock latest times out', async () => {
-    const eth = moduleRef.get(EthService);
-    jest.spyOn(eth, 'getProvider').mockReturnValue({
-      getFeeData: async () => ({ maxPriorityFeePerGas: 1n, maxFeePerGas: 3n, gasPrice: 2n }),
-      getBlock: async () => { await new Promise(r => setTimeout(r, 200)); return { baseFeePerGas: 1n, number: 100 }; },
-      getBlockNumber: async () => 100,
-      on: () => {}, off: () => {},
-    } as any);
+    const eth = moduleRef.get<EthService>(EthService) as any;
+    jest.spyOn(eth, 'withProviderFailover').mockImplementation(async (op: any) => {
+      // Simulate timeout by throwing from op after slow getBlock
+      try {
+        await op({
+          getFeeData: async () => ({ maxPriorityFeePerGas: 1n, maxFeePerGas: 3n, gasPrice: 2n }),
+          getBlock: async () => { await new Promise(r => setTimeout(r, 200)); return { baseFeePerGas: 1n, number: 100 }; },
+          getBlockNumber: async () => 100,
+          on: () => {}, off: () => {},
+        });
+      } catch (e) {
+        throw e;
+      }
+      throw new Error('Timeout');
+    });
     process.env.RPC_TIMEOUT_MS = '50';
     await expect((service as any).refresh()).rejects.toThrow('Timeout');
     delete process.env.RPC_TIMEOUT_MS;

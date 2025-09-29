@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UniswapService } from './uniswap.service';
 import { EthService } from '../eth/eth.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { ethers } from 'ethers';
 
 class MockFactory {
   constructor(private pairAddress: string) {}
@@ -14,16 +15,9 @@ class MockPair {
   async getReserves() { return this.reserves as any; }
 }
 
-class MockProvider {
-  constructor(private factory: any, private pair: any) {}
-  getBlockNumber = async () => 123;
-  // Simulate ethers.Contract(address, abi, provider)
-  // We will intercept via a simple function on EthService
-}
-
 class MockEthService {
-  constructor(private factory: any, private pair: any) {}
   getProvider() { return {} as any; }
+  async withProviderFailover<T>(op: (p: any) => Promise<T>) { return op({ getBlockNumber: async () => 123 }); }
 }
 
 // We will monkey-patch ethers.Contract usage by stubbing UniswapService dependencies through its methods
@@ -42,14 +36,14 @@ describe('UniswapService', () => {
     moduleRef = await Test.createTestingModule({
       providers: [
         UniswapService,
-        { provide: EthService, useValue: { getProvider: () => ({ getBlockNumber: async () => 123 }) } },
+        { provide: EthService, useClass: MockEthService },
       ],
     }).compile();
 
     service = moduleRef.get(UniswapService);
 
-    // Patch contract creation method on service
-    jest.spyOn<any, any>(service as any, 'createContract').mockImplementation((address: string) => {
+    // Mock ethers.Contract constructor to return our factory/pair
+    jest.spyOn(ethers as any, 'Contract').mockImplementation((address: string) => {
       if (address === '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f') return factory as any;
       if (address === '0xPAIR') return pair as any;
       return {} as any;
@@ -78,8 +72,9 @@ describe('UniswapService', () => {
 
   it('throws 404 when factory returns zero address (pair not found)', async () => {
     factory = new MockFactory('0x0000000000000000000000000000000000000000');
-    (service as any).createContract.mockImplementation((address: string) => {
+    (ethers as any).Contract.mockImplementation((address: string) => {
       if (address === '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f') return factory as any;
+      if (address === '0xPAIR') return pair as any;
       return {} as any;
     });
     await expect(service.quote('0xFrom', '0xTo', '100')).rejects.toThrow(NotFoundException);
@@ -90,7 +85,7 @@ describe('UniswapService', () => {
 
     // zero reserves case
     pair = new MockPair('0xFrom', [0n, 0n, 0]);
-    (service as any).createContract.mockImplementation((address: string) => {
+    (ethers as any).Contract.mockImplementation((address: string) => {
       if (address === '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f') return factory as any;
       if (address === '0xPAIR') return pair as any;
       return {} as any;
@@ -101,7 +96,7 @@ describe('UniswapService', () => {
   it('handles very large amountIn without overflow', async () => {
     // reserves 1e24 in, 2e24 out; amountIn 1e30
     pair = new MockPair('0xFrom', [BigInt('1000000000000000000000000'), BigInt('2000000000000000000000000'), 0]);
-    (service as any).createContract.mockImplementation((address: string) => {
+    (ethers as any).Contract.mockImplementation((address: string) => {
       if (address === '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f') return factory as any;
       if (address === '0xPAIR') return pair as any;
       return {} as any;
@@ -121,7 +116,7 @@ describe('UniswapService', () => {
   it('works when reserves differ by decimals-like magnitudes (18↔6)', async () => {
     // Simulate 18-dec token as input reserve (1e24) and 6-dec token as output reserve (1e10)
     pair = new MockPair('0xFrom', [BigInt('1000000000000000000000000'), BigInt('10000000000'), 0]);
-    (service as any).createContract.mockImplementation((address: string) => {
+    (ethers as any).Contract.mockImplementation((address: string) => {
       if (address === '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f') return factory as any;
       if (address === '0xPAIR') return pair as any;
       return {} as any;

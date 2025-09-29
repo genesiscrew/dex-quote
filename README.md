@@ -13,18 +13,19 @@ cp .env.example .env   # set RPC_URL at minimum
 npm run start:dev
 ```
 Minimal env:
-- `RPC_URL` (Alchemy/Infura/QuickNode)
+- `RPC_URL` (Alchemy/Infura/QuickNode) or `RPC_URLS` (comma‑separated for failover)
 - `CHAIN_ID` (default 1)
 
 ## Endpoints
 - GET `/gasPrice`
   - Returns: `baseFeePerGas`, `maxPriorityFeePerGas`, `maxFeePerGas`, `gasPrice`, `blockNumber`, `updatedAt`, `stale`
-  - Notes: served from an in‑memory snapshot refreshed on each new block; the app waits for the first snapshot before listening.
+  - Notes: served from an in‑memory snapshot; returns `503` until warm. Adds `Age`, `X-Cache`, `Cache-Control`.
 
 - GET `/return/:from/:to/:amount`
   - Input: addresses and `amount` in base units (e.g., wei for WETH, 6‑decimals for USDC)
-  - Output: `amountOut`, `pair`, `reserveIn`, `reserveOut`, `feeBps`, `updatedAtBlock`
-  - Errors: invalid params → 400; insufficient liquidity/input → 400 with Uniswap‑like messages; pair missing → 200 with `{ "error": "pair not found" }`
+  - Output: `amountOut`, `pair`, `reserveIn`, `reserveOut`, `feeBps`, `updatedAtBlock`, plus `chainId`, `factory`, `timestampLast`
+  - Errors: invalid params → 400; insufficient liquidity/input → 400 (Uniswap‑style); pair missing → `404 { code: "PAIR_NOT_FOUND" }`
+  - State reads (`getPair`, `token0`, `getReserves`, `getBlockNumber`) use per‑request RPC failover with timeouts/retries.
 
 ### Examples
 ```bash
@@ -101,12 +102,26 @@ npm run test:e2e   # e2e (provider overrides, no real RPC)
 
 ## Environment
 - Copy `.env.example` and adjust. Common variables:
-  - RPC: `RPC_URL`, `CHAIN_ID`
+  - RPC: `RPC_URL` or `RPC_URLS`, `CHAIN_ID`, `RPC_TIMEOUT_MS`, `RPC_COOLDOWN_MS`, `RPC_HEALTH_INTERVAL_MS`
   - Server: `PORT`
-  - Gas snapshot: `DEFAULT_PRIORITY_GWEI`, `GAS_READY_TIMEOUT_MS`
+  - Gas snapshot: `DEFAULT_PRIORITY_GWEI`, `GAS_READY_TIMEOUT_MS`, `GAS_REFRESH_INTERVAL_MS`
   - Metrics: `METRICS_DEBUG`
   - Rate limiting: `RL_DEFAULT_*`, `RL_GAS_*`, `RL_RETURN_*`, optional `REDIS_URL`
   - Proxy trust: `TRUST_PROXY=1` to respect X-Forwarded-For
+
+## RPC resilience (retry & failover)
+- Multiple RPCs (`RPC_URLS=a,b,c`): each call tries providers in order.
+- Timeouts/retry: per‑call timeout via `RPC_TIMEOUT_MS` and a small retry budget.
+- Circuit breaker: failed providers enter cooldown (`RPC_COOLDOWN_MS`).
+- Health probe: `RPC_HEALTH_INTERVAL_MS` clears cooldown when providers recover.
+- Gas freshness: block listener on primary plus fallback polling (`GAS_REFRESH_INTERVAL_MS`).
+
+Example:
+```bash
+RPC_URLS="https://rpc1,https://rpc2" \
+RPC_TIMEOUT_MS=500 RPC_COOLDOWN_MS=30000 RPC_HEALTH_INTERVAL_MS=15000 \
+GAS_REFRESH_INTERVAL_MS=3000 npm run start
+```
 
 ## Notes
 - Uniswap V2 math matches periphery (0.3% fee, constant‑product) computed in BigInt

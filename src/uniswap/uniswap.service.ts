@@ -47,19 +47,19 @@ export class UniswapService {
   }
 
   async quote(fromToken: string, toToken: string, amountInStr: string): Promise<QuoteResult> {
-    const provider = this.eth.getProvider();
-    const factory = this.createContract(UNISWAP_V2_FACTORY, FACTORY_ABI, provider);
     const timeoutMs = parseInt(process.env.RPC_TIMEOUT_MS ?? '1500', 10);
-    const pairAddr: string = await withRetry(() => (factory as any).getPair(fromToken, toToken), { attempts: 1, timeoutMs });
+    const pairAddr: string = await this.eth.withProviderFailover(
+      (p) => new ethers.Contract(UNISWAP_V2_FACTORY, FACTORY_ABI, p).getPair(fromToken, toToken),
+      { attempts: 1, timeoutMs }
+    );
     if (!pairAddr || pairAddr === ethers.ZeroAddress) {
       throw new NotFoundException({ code: 'PAIR_NOT_FOUND', message: 'UniswapV2 pair does not exist' });
     }
 
-    const pair = this.createContract(pairAddr, PAIR_ABI, provider);
     const [token0, reserves, block] = await Promise.all([
-      withRetry(() => (pair as any).token0() as Promise<string>, { attempts: 1, timeoutMs }),
-      withRetry(() => (pair as any).getReserves() as Promise<[ethers.BigNumberish, ethers.BigNumberish, number]>, { attempts: 1, timeoutMs }),
-      withRetry(() => provider.getBlockNumber(), { attempts: 1, timeoutMs }),
+      this.eth.withProviderFailover((p) => new ethers.Contract(pairAddr, PAIR_ABI, p).token0() as Promise<string>, { attempts: 1, timeoutMs }),
+      this.eth.withProviderFailover((p) => new ethers.Contract(pairAddr, PAIR_ABI, p).getReserves() as Promise<[ethers.BigNumberish, ethers.BigNumberish, number]>, { attempts: 1, timeoutMs }),
+      this.eth.withProviderFailover((p) => p.getBlockNumber(), { attempts: 1, timeoutMs }),
     ]);
 
     const fromIsToken0 = fromToken.toLowerCase() === (token0 as string).toLowerCase();
