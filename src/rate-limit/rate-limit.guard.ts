@@ -11,7 +11,6 @@ export class RateLimitGuard implements CanActivate {
     const res = context.switchToHttp().getResponse();
     const method = (req.method || 'GET').toUpperCase();
     const urlPath: string = (req?.originalUrl || req?.url || '').split('?')[0] || '/';
-    // Normalize dynamic routes to known templates for consistent buckets
     let effectiveRoute = urlPath;
     if (urlPath.startsWith('/gasPrice')) {
       effectiveRoute = '/gasPrice';

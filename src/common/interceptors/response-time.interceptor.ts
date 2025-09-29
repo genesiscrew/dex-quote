@@ -14,7 +14,6 @@ export class ResponseTimeInterceptor implements NestInterceptor {
         const ns = Number(process.hrtime.bigint() - start);
         const ms = ns / 1e6;
         res.setHeader('X-Response-Time', `${ms.toFixed(2)}ms`);
-        // Simple structured log
         // eslint-disable-next-line no-console
         console.log(JSON.stringify({ method: req.method, path: req.url, status: res.statusCode, ms: +ms.toFixed(2) }));
       }),

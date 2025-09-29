@@ -30,12 +30,27 @@ Minimal env:
 - Prometheus at `GET /metrics` (`http_server_duration_ms`, `http_requests_total`, plus default Node.js metrics)
 - Every response includes `X-Response-Time: <ms>`
 
+When to use what
+- Developer debugging (per-request):
+  - `curl -v http://localhost:3000/gasPrice` → check `X-Response-Time: <ms>` immediately
+- Ops/monitoring (trends/percentiles):
+  - PromQL example: `rate(http_server_duration_ms_sum[5m]) / rate(http_server_duration_ms_count[5m])`
+  - Use histogram_quantile for p95/p99
+
 ## Rate limiting
 - Per‑IP, per‑route token bucket via `rate-limiter-flexible`
 - Defaults: `RL_DEFAULT_POINTS`, `RL_DEFAULT_DURATION`
 - Route overrides: `RL_GAS_*` for `/gasPrice`, `RL_RETURN_*` for `/return/...`
 - Backends: in‑memory by default; set `REDIS_URL` for Redis‑backed shared buckets
 - 429 responses include `X-RateLimit-*` and `Retry-After`
+
+Policy basics
+- Each IP gets its own bucket per route (key is `${ip}:${route}`) within a fixed window.
+- When tokens run out in the window, further requests return 429 until the window resets.
+- Suggested starting values:
+  - `/gasPrice` (cheap): 60 requests per 60s
+  - `/return/...` (expensive): 12 requests per 60s
+- You can add a temporary ban via `RL_DEFAULT_BLOCK` (seconds) if desired.
 
 ## Testing
 ```bash

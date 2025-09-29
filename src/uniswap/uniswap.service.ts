@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { EthService } from '../eth/eth.service';
 import { FACTORY_ABI, PAIR_ABI, UNISWAP_V2_FACTORY } from './abis';
@@ -13,6 +13,9 @@ type QuoteResult = {
   updatedAtBlock: number;
   stale: boolean;
   error?: string;
+  chainId?: number;
+  factory?: string;
+  timestampLast?: number;
 };
 
 @Injectable()
@@ -43,18 +46,7 @@ export class UniswapService {
     const factory = this.createContract(UNISWAP_V2_FACTORY, FACTORY_ABI, provider);
     const pairAddr: string = await factory.getPair(fromToken, toToken);
     if (!pairAddr || pairAddr === ethers.ZeroAddress) {
-      const block = await provider.getBlockNumber();
-      return {
-        pair: ethers.ZeroAddress,
-        amountIn: amountInStr,
-        amountOut: '0',
-        reserveIn: '0',
-        reserveOut: '0',
-        feeBps: 30,
-        updatedAtBlock: block,
-        stale: false,
-        error: 'pair not found',
-      };
+      throw new NotFoundException({ code: 'PAIR_NOT_FOUND', message: 'UniswapV2 pair does not exist' });
     }
 
     const pair = this.createContract(pairAddr, PAIR_ABI, provider);
@@ -70,6 +62,7 @@ export class UniswapService {
     const amountIn = BigInt(amountInStr);
     const amountOut = this.getAmountOut(amountIn, reserveIn, reserveOut);
 
+    const chainId = parseInt(process.env.CHAIN_ID ?? '1', 10);
     return {
       pair: pairAddr,
       amountIn: amountIn.toString(),
@@ -79,6 +72,9 @@ export class UniswapService {
       feeBps: 30,
       updatedAtBlock: block,
       stale: false,
+      chainId,
+      factory: UNISWAP_V2_FACTORY,
+      timestampLast: Number((reserves as any)[2] ?? 0),
     };
   }
 }

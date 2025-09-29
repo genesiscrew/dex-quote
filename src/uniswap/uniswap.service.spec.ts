@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UniswapService } from './uniswap.service';
 import { EthService } from '../eth/eth.service';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 class MockFactory {
   constructor(private pairAddress: string) {}
@@ -76,15 +76,13 @@ describe('UniswapService', () => {
     expect(res2.amountOut).toBe('47');
   });
 
-  it('returns pair not found error object when factory returns zero address', async () => {
+  it('throws 404 when factory returns zero address (pair not found)', async () => {
     factory = new MockFactory('0x0000000000000000000000000000000000000000');
     (service as any).createContract.mockImplementation((address: string) => {
       if (address === '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f') return factory as any;
       return {} as any;
     });
-    const res = await service.quote('0xFrom', '0xTo', '100');
-    expect(res.error).toBe('pair not found');
-    expect(res.amountOut).toBe('0');
+    await expect(service.quote('0xFrom', '0xTo', '100')).rejects.toThrow(NotFoundException);
   });
 
   it('throws on insufficient liquidity and input amount per on-chain semantics', async () => {
@@ -98,6 +96,45 @@ describe('UniswapService', () => {
       return {} as any;
     });
     await expect(service.quote('0xFrom', '0xTo', '100')).rejects.toThrow('INSUFFICIENT_LIQUIDITY');
+  });
+
+  it('handles very large amountIn without overflow', async () => {
+    // reserves 1e24 in, 2e24 out; amountIn 1e30
+    pair = new MockPair('0xFrom', [BigInt('1000000000000000000000000'), BigInt('2000000000000000000000000'), 0]);
+    (service as any).createContract.mockImplementation((address: string) => {
+      if (address === '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f') return factory as any;
+      if (address === '0xPAIR') return pair as any;
+      return {} as any;
+    });
+    const amountIn = BigInt('1000000000000000000000000000000'); // 1e30
+    // expected using formula
+    const amountInWithFee = amountIn * 997n;
+    const reserveIn = BigInt('1000000000000000000000000');
+    const reserveOut = BigInt('2000000000000000000000000');
+    const numerator = amountInWithFee * reserveOut;
+    const denominator = reserveIn * 1000n + amountInWithFee;
+    const expected = (numerator / denominator).toString();
+    const res = await service.quote('0xFrom', '0xTo', amountIn.toString());
+    expect(res.amountOut).toBe(expected);
+  });
+
+  it('works when reserves differ by decimals-like magnitudes (18↔6)', async () => {
+    // Simulate 18-dec token as input reserve (1e24) and 6-dec token as output reserve (1e10)
+    pair = new MockPair('0xFrom', [BigInt('1000000000000000000000000'), BigInt('10000000000'), 0]);
+    (service as any).createContract.mockImplementation((address: string) => {
+      if (address === '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f') return factory as any;
+      if (address === '0xPAIR') return pair as any;
+      return {} as any;
+    });
+    const amountIn = BigInt('1000000000000000000'); // 1e18 (1 token with 18 decimals)
+    const amountInWithFee = amountIn * 997n;
+    const reserveIn = BigInt('1000000000000000000000000');
+    const reserveOut = BigInt('10000000000');
+    const numerator = amountInWithFee * reserveOut;
+    const denominator = reserveIn * 1000n + amountInWithFee;
+    const expected = (numerator / denominator).toString();
+    const res = await service.quote('0xFrom', '0xTo', amountIn.toString());
+    expect(res.amountOut).toBe(expected);
   });
 });
 
