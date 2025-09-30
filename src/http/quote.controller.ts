@@ -51,6 +51,26 @@ export class QuoteController {
       throw new BadRequestException('Invalid amountIn');
     }
 
+    // Reject identical tokens
+    if (fromTokenAddress.toLowerCase() === toTokenAddress.toLowerCase()) {
+      try { this.logger.warn(`Identical token addresses: ${fromTokenAddress}`); } catch {}
+      throw new BadRequestException('fromToken and toToken must be different');
+    }
+
+    // Optional max input guard via env MAX_AMOUNT_IN (BigInt string)
+    const maxStr = process.env.MAX_AMOUNT_IN;
+    if (maxStr) {
+      try {
+        const max = BigInt(maxStr);
+        if (BigInt(amountIn) > max) {
+          try { this.logger.warn(`amountIn exceeds MAX_AMOUNT_IN: ${amountIn} > ${maxStr}`); } catch {}
+          throw new BadRequestException('amountIn exceeds maximum allowed');
+        }
+      } catch {
+        // ignore invalid MAX_AMOUNT_IN config
+      }
+    }
+
     return this.uniswap.quote(fromTokenAddress, toTokenAddress, amountIn);
   }
 }
