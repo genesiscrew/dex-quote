@@ -5,6 +5,7 @@ import { ResponseTimeInterceptor } from './common/interceptors/response-time.int
 import { MetricsService } from './metrics/metrics.service';
 import { RateLimitGuard } from './rate-limit/rate-limit.guard';
 import { RateLimitService } from './rate-limit/rate-limit.service';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -39,6 +40,14 @@ async function bootstrap() {
     });
     next();
   });
+  // Swagger/OpenAPI at /docs
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('DEX Quote API')
+    .setDescription('Gas price snapshot and Uniswap V2 quoting (off-chain math)')
+    .setVersion('1.0.0')
+    .build();
+  const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, swaggerDoc);
   await app.init();
 
   const gas = app.get(GasService);

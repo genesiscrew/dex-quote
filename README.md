@@ -16,6 +16,9 @@ Minimal env:
 - `RPC_URL` (Alchemy/Infura/QuickNode) or `RPC_URLS` (comma‑separated for failover)
 - `CHAIN_ID` (default 1)
 
+API docs
+- Swagger/OpenAPI UI: visit `/docs` when the app is running
+
 ## Endpoints
 - GET `/gasPrice`
   - Returns: `baseFeePerGas`, `maxPriorityFeePerGas`, `maxFeePerGas`, `gasPrice`, `blockNumber`, `updatedAt`, `stale`
