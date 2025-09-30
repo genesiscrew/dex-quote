@@ -23,11 +23,6 @@ type QuoteResult = {
 export class UniswapService {
   constructor(private readonly eth: EthService) {}
 
-  // Factory method to facilitate testing/mocking of contracts
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private createContract(address: string, abi: any, provider: ethers.Provider): any {
-    return new ethers.Contract(address, abi, provider);
-  }
 
   /**
    * Uniswap V2 amountOut with 0.3% fee (997/1000).

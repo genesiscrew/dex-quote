@@ -1,6 +1,7 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { withRetry } from '../common/utils/retry.util';
+import { MetricsService } from '../metrics/metrics.service';
 
 /**
  * Provides a singleton ethers JsonRpcProvider for chain access.
@@ -12,7 +13,7 @@ export class EthService implements OnModuleDestroy, OnModuleInit {
   private readonly providerState = new Map<ethers.JsonRpcProvider, { cooldownUntil: number }>();
   private healthTimer?: NodeJS.Timeout;
 
-  constructor() {
+  constructor(private readonly metrics: MetricsService) {
     const chainId = parseInt(process.env.CHAIN_ID ?? '1', 10);
     const urlsEnv = process.env.RPC_URLS?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
     const single = process.env.RPC_URL ? [process.env.RPC_URL] : [];
@@ -38,11 +39,17 @@ export class EthService implements OnModuleDestroy, OnModuleInit {
           if (state.cooldownUntil <= Date.now()) {
             // quick probe; if succeeds, clear cooldown
             try {
+              const start = Date.now();
               await withRetry(() => prov.getBlockNumber(), { attempts: 0, timeoutMs });
+              const ms = Date.now() - start;
+              this.metrics.rpcRequestDurationMs.labels((prov as any)?.connection?.url ?? 'provider', 'health', 'ok').observe(ms);
+              this.metrics.rpcRequestsTotal.labels((prov as any)?.connection?.url ?? 'provider', 'health', 'ok').inc();
               this.providerState.set(prov, { cooldownUntil: 0 });
             } catch {
+              this.metrics.rpcRequestsTotal.labels((prov as any)?.connection?.url ?? 'provider', 'health', 'error').inc();
               // keep cooldown
             }
+            this.metrics.rpcHealthProbeTotal.labels((prov as any)?.connection?.url ?? 'provider', state.cooldownUntil === 0 ? 'ok' : 'error').inc();
           }
         }
       }, intervalMs);
@@ -65,6 +72,7 @@ export class EthService implements OnModuleDestroy, OnModuleInit {
     let lastErr: unknown;
     const now = Date.now();
     const cooldownMs = parseInt(process.env.RPC_COOLDOWN_MS ?? '30000', 10);
+    let usedFallback = false;
     for (let i = 0; i < this.providers.length; i++) {
       const prov = this.providers[i];
       const state = this.providerState.get(prov)!;
@@ -72,11 +80,23 @@ export class EthService implements OnModuleDestroy, OnModuleInit {
         continue; // skip providers in cooldown
       }
       try {
-        return await withRetry(() => op(prov), { attempts, timeoutMs, backoffMs });
+        const label = options?.attempts ? `attempts_${options.attempts}` : 'attempts_default';
+        const urlLabel = (prov as any)?.connection?.url ?? `provider_${i}`;
+        const start = Date.now();
+        const result = await withRetry(() => op(prov), { attempts, timeoutMs, backoffMs });
+        const ms = Date.now() - start;
+        this.metrics.rpcRequestDurationMs.labels(urlLabel, label, 'ok').observe(ms);
+        this.metrics.rpcRequestsTotal.labels(urlLabel, label, 'ok').inc();
+        if (usedFallback) this.metrics.rpcFailoverTotal.labels(label).inc();
+        return result;
       } catch (err) {
         lastErr = err;
+        const urlLabel = (prov as any)?.connection?.url ?? `provider_${i}`;
+        this.metrics.rpcRequestsTotal.labels(urlLabel, 'op', 'error').inc();
         // mark provider as cooling down and try next provider
         this.providerState.set(prov, { cooldownUntil: Date.now() + cooldownMs });
+        this.metrics.rpcCooldownsTotal.labels(urlLabel).inc();
+        usedFallback = true;
         continue;
       }
     }

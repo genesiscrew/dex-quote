@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EthService } from './eth.service';
+import { MetricsService } from '../metrics/metrics.service';
 
 describe('EthService failover/circuit-breaker', () => {
   let moduleRef: TestingModule;
@@ -10,7 +11,7 @@ describe('EthService failover/circuit-breaker', () => {
     delete process.env.RPC_URLS;
     process.env.RPC_TIMEOUT_MS = '50';
     process.env.RPC_COOLDOWN_MS = '200';
-    moduleRef = await Test.createTestingModule({ providers: [EthService] }).compile();
+    moduleRef = await Test.createTestingModule({ providers: [EthService, MetricsService] }).compile();
     service = moduleRef.get(EthService);
     // Replace internal providers with fakes
     const p1: any = { getBlockNumber: jest.fn(async () => { throw new Error('fail'); }) };

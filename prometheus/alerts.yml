@@ -1,0 +1,15 @@
+groups:
+  - name: gasprice-sla
+    interval: 1m
+    rules:
+      - alert: GasPriceP99High
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_server_duration_ms_bucket{route="/gasPrice"}[5m])) by (le)) > 0.05
+        for: 10m
+        labels:
+          severity: page
+          service: dex-quote-api
+        annotations:
+          summary: "gasPrice p99 latency > 50ms for 10m"
+          description: "Investigate cache staleness, CPU saturation, or middleware changes."
+

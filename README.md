@@ -72,6 +72,25 @@ curl -s http://localhost:3000/metrics | head
 - Prometheus at `GET /metrics` (`http_server_duration_ms`, `http_requests_total`, plus default Node.js metrics)
 - Every response includes `X-Response-Time: <ms>`
 
+SLA queries (Prometheus)
+- p50: `histogram_quantile(0.50, sum(rate(http_server_duration_ms_bucket{route="/gasPrice"}[5m])) by (le))`
+- p95: `histogram_quantile(0.95, sum(rate(http_server_duration_ms_bucket{route="/gasPrice"}[5m])) by (le))`
+- p99: `histogram_quantile(0.99, sum(rate(http_server_duration_ms_bucket{route="/gasPrice"}[5m])) by (le))`
+- Error budget: `sum(rate(http_requests_total{route="/gasPrice",status=~"5.."}[5m])) / sum(rate(http_requests_total{route="/gasPrice"}[5m]))`
+
+### Operations
+- Prometheus
+  - Scrape this service’s `/metrics` endpoint
+  - Load alert rules from `prometheus/alerts.yml` (rule_files)
+  - Route `severity=page` in Alertmanager for `GasPriceP99High`
+- Grafana
+  - Use the SLA queries above to build panels filtered by `route="/gasPrice"`
+- CI/CD
+  - Run the SLA test `test/gas.sla.e2e-spec.ts` (via `npm run test:e2e`) to prevent latency regressions
+- Ops
+  - If p99 > 50ms alert fires, check cache readiness, CPU saturation, or middleware changes; drill down by labels `method`, `route`, `status`
+  - Tune thresholds/windows in `alerts.yml` to your SLO; adjust histogram buckets or route labels as paths evolve
+
 When to use what
 - Developer debugging (per-request):
   - `curl -v http://localhost:3000/gasPrice` → check `X-Response-Time: <ms>` immediately
@@ -124,4 +143,4 @@ GAS_REFRESH_INTERVAL_MS=3000 npm run start
 ```
 
 ## Notes
-- Uniswap V2 math matches periphery (0.3% fee, constant‑product) computed in BigInt
+- Uniswap V2 math matches periphery (0.3% fee, constant‑product) computed in BigInt -> https://github.com/Uniswap/v2-periphery/blob/0335e8f7e1bd1e8d8329fd300aea2ef2f36dd19f/contracts/libraries/UniswapV2Library.sol#L42C1-L50C6

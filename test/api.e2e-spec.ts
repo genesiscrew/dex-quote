@@ -105,6 +105,15 @@ describe('API (e2e)', () => {
     expect(res.text).toMatch(/http_requests_total/);
   });
 
+  it('Metrics include route label isolating /gasPrice', async () => {
+    await request(app.getHttpServer()).get('/gasPrice').expect(200);
+    const res = await request(app.getHttpServer()).get('/metrics').expect(200);
+    expect(res.text).toMatch(/route="\/gasPrice"/);
+    // Relaxed: ensure duration histogram and 50ms bucket exist (not necessarily same line)
+    expect(res.text).toMatch(/http_server_duration_ms_bucket/);
+    expect(res.text).toMatch(/le="50"/);
+  });
+
   it('Rate limiting on /return returns 429 on second request', async () => {
     process.env.RL_RETURN_POINTS = '1';
     process.env.RL_RETURN_DURATION = '60';

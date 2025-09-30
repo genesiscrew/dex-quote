@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EthService } from './eth.service';
 import { ethers } from 'ethers';
+import { MetricsService } from '../metrics/metrics.service';
 
 describe('EthService getFeeData (timeout/retry)', () => {
   let moduleRef: TestingModule;
@@ -10,7 +11,7 @@ describe('EthService getFeeData (timeout/retry)', () => {
   beforeEach(async () => {
     originalEnv = process.env.RPC_TIMEOUT_MS;
     process.env.RPC_TIMEOUT_MS = '50';
-    moduleRef = await Test.createTestingModule({ providers: [EthService] }).compile();
+    moduleRef = await Test.createTestingModule({ providers: [EthService, MetricsService] }).compile();
     service = moduleRef.get(EthService);
   });
 
