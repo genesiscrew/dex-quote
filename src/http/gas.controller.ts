@@ -1,4 +1,4 @@
-import { Controller, Get, Res, ServiceUnavailableException } from '@nestjs/common';
+import { Controller, Get, Res, ServiceUnavailableException, Logger } from '@nestjs/common';
 import { ApiOperation, ApiOkResponse, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { GasService } from '../eth/gas.service';
@@ -9,6 +9,7 @@ import { GasService } from '../eth/gas.service';
 @ApiTags('gas')
 @Controller('gasPrice')
 export class GasController {
+  private readonly logger = new Logger(GasController.name);
   constructor(private readonly gas: GasService) {}
 
   /**
@@ -22,6 +23,7 @@ export class GasController {
   async getGasPrice(@Res({ passthrough: true }) res: Response) {
     const snap = this.gas.getSnapshot();
     if (!snap) {
+      try { this.logger.warn('Gas snapshot not ready'); } catch {}
       throw new ServiceUnavailableException({ code: 'NO_DATA', message: 'Gas snapshot not ready' });
     }
     const ageMs = Math.max(Date.now() - snap.updatedAt, 0);

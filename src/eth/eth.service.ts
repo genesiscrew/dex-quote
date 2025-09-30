@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit, Logger } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { withRetry } from '../common/utils/retry.util';
 import { MetricsService } from '../metrics/metrics.service';
@@ -8,6 +8,7 @@ import { MetricsService } from '../metrics/metrics.service';
  */
 @Injectable()
 export class EthService implements OnModuleDestroy, OnModuleInit {
+  private readonly logger = new Logger(EthService.name);
   private readonly provider: ethers.JsonRpcProvider;
   private readonly providers: ethers.JsonRpcProvider[] = [];
   private readonly providerState = new Map<ethers.JsonRpcProvider, { cooldownUntil: number }>();
@@ -97,6 +98,7 @@ export class EthService implements OnModuleDestroy, OnModuleInit {
         this.providerState.set(prov, { cooldownUntil: Date.now() + cooldownMs });
         this.metrics.rpcCooldownsTotal.labels(urlLabel).inc();
         usedFallback = true;
+        try { this.logger.warn(`RPC provider cooled down: ${urlLabel} (${String((err as any)?.message || err)})`); } catch {}
         continue;
       }
     }

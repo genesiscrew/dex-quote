@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { EthService } from '../eth/eth.service';
 import { FACTORY_ABI, PAIR_ABI, UNISWAP_V2_FACTORY } from './abis';
@@ -21,6 +21,7 @@ type QuoteResult = {
 
 @Injectable()
 export class UniswapService {
+  private readonly logger = new Logger(UniswapService.name);
   constructor(private readonly eth: EthService) {}
 
 
@@ -48,6 +49,7 @@ export class UniswapService {
       { attempts: 1, timeoutMs }
     );
     if (!pairAddr || pairAddr === ethers.ZeroAddress) {
+      try { this.logger.warn(`PAIR_NOT_FOUND from=${fromToken} to=${toToken}`); } catch {}
       throw new NotFoundException({ code: 'PAIR_NOT_FOUND', message: 'UniswapV2 pair does not exist' });
     }
 
@@ -64,6 +66,9 @@ export class UniswapService {
     const amountOut = this.getAmountOut(amountIn, reserveIn, reserveOut);
 
     const chainId = parseInt(process.env.CHAIN_ID ?? '1', 10);
+    try {
+      this.logger.debug?.(`quote computed from=${fromToken} to=${toToken} pair=${pairAddr} amountIn=${amountIn.toString()} amountOut=${amountOut.toString()} block=${block}`);
+    } catch {}
     return {
       pair: pairAddr,
       amountIn: amountIn.toString(),

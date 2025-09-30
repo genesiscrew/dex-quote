@@ -1,4 +1,4 @@
-import { Controller, Get, Param, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Param, BadRequestException, Logger } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { UniswapService } from '../uniswap/uniswap.service';
 import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
@@ -18,6 +18,7 @@ function isValidAmount(amount: string): boolean {
 @ApiTags('uniswap')
 @Controller('return')
 export class QuoteController {
+  private readonly logger = new Logger(QuoteController.name);
   constructor(private readonly uniswap: UniswapService) {}
 
   /**
@@ -38,12 +39,15 @@ export class QuoteController {
     @Param('amountIn') amountIn: string,
   ) {
     if (!ethers.isAddress(fromTokenAddress)) {
+      try { this.logger.warn(`Invalid fromTokenAddress: ${fromTokenAddress}`); } catch {}
       throw new BadRequestException('Invalid fromTokenAddress');
     }
     if (!ethers.isAddress(toTokenAddress)) {
+      try { this.logger.warn(`Invalid toTokenAddress: ${toTokenAddress}`); } catch {}
       throw new BadRequestException('Invalid toTokenAddress');
     }
     if (!isValidAmount(amountIn)) {
+      try { this.logger.warn(`Invalid amountIn: ${amountIn}`); } catch {}
       throw new BadRequestException('Invalid amountIn');
     }
 

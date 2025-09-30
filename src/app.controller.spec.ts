@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { EthService } from './eth/eth.service';
 
@@ -26,7 +27,7 @@ describe('AppController', () => {
     expect(res).toEqual({ ok: true });
   });
 
-  it('healthz returns ok false when provider throws', async () => {
+  it('healthz throws 503 when provider throws', async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
       providers: [
@@ -40,7 +41,6 @@ describe('AppController', () => {
     }).compile();
 
     const ctrl = module.get<AppController>(AppController);
-    const res = await ctrl.healthz();
-    expect(res).toEqual({ ok: false });
+    await expect(ctrl.healthz()).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 });
